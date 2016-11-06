@@ -1,10 +1,11 @@
 //! Main entry point for the game. It manages the game loop.
 
 use glium::Display;
-use glium::glutin::VirtualKeyCode;
+use glium::glutin::{Event, VirtualKeyCode};
 use std::time::{Duration, Instant};
 
 use config::Config;
+use graphics::Quad;
 
 #[derive(Debug, Clone, Copy)]
 enum Command {
@@ -43,44 +44,57 @@ impl App {
     }
 
     pub fn run(self) {
-        use glium::glutin::{ElementState, Event};
-        use glium::Surface;
-
-        use graphics::Render;
         use graphics::Quad;
 
         let mut commands: Vec<Command> = Vec::new();
         let mut events = self.display.poll_events();
-        let mut running = true;
 
-        let mut quad: Quad = Quad::new(&self.display, (32i32, 32i32), (32i32, 32i32));
+        let mut quad: Quad = Quad::new(&self.display, (32, 32), (32, 32));
 
-        GameLoop::new(self.config.frame_rate).run(|| {
-            if let Some(event) = events.next() {
-                match event {
-                    Event::KeyboardInput(ElementState::Released, _, Some(key)) => {
-                        if let Some(command) = get_keyboard_command(key) { commands.push(command) }
-                    },
-                    _ => { }
-                }
-            }
+        GameLoop::new(self.config.frame_rate).run(|_| {
+            process_events(&mut events, &mut commands);
+            if !update_and_keep_running(&mut commands, &mut quad) { return false }
+            render(&self.display, &quad);
 
-            match commands.pop() {
-                Some(Command::Quit) => running = false,
-                Some(Command::Move(direction)) => quad.translate(direction),
-                _ => { }
-            }
-
-            let mut target = self.display.draw();
-            target.clear_color(0.1, 0.1, 0.1, 1.0);
-
-            target.render(&quad);
-
-            target.finish().unwrap();
-
-            running
+            true
         });
     }
+}
+
+fn process_events<I: Iterator<Item = Event>>(events: &mut I, commands: &mut Vec<Command>) {
+    use glium::glutin::ElementState;
+
+    if let Some(event) = events.next() {
+        match event {
+            Event::KeyboardInput(ElementState::Released, _, Some(key)) => {
+                if let Some(command) = get_keyboard_command(key) { commands.push(command) }
+            },
+            _ => { }
+        }
+    }
+}
+
+fn update_and_keep_running(commands: &mut Vec<Command>, quad: &mut Quad) -> bool {
+    match commands.pop() {
+        Some(Command::Quit) => return false,
+        Some(Command::Move(direction)) => quad.translate(direction),
+        _ => { }
+    }
+
+    true
+}
+
+fn render(window: &Display, quad: &Quad) {
+    use glium::Surface;
+
+    use graphics::Render;
+
+    let mut target = window.draw();
+    target.clear_color(0.1, 0.1, 0.1, 1.0);
+
+    target.render(quad);
+
+    target.finish().unwrap();
 }
 
 fn get_keyboard_command(key: VirtualKeyCode) -> Option<Command> {
@@ -113,29 +127,32 @@ impl GameLoop {
         }
     }
 
-    pub fn run<F: FnMut() -> bool>(mut self, mut loop_operation: F) {
+    pub fn run<F: FnMut(Duration) -> bool>(mut self, mut loop_operation: F) {
         loop {
             let current_instant = Instant::now();
-            if self.frame_too_soon(current_instant) { continue }
 
-            if !loop_operation() { break }
+            if let FrameThrottler::Run(duration) = self.throttle(current_instant) {
+                if !loop_operation(duration) { break }
 
-            self.previous_instant = current_instant;
-            self.update_fps_display(current_instant);
+                self.previous_instant = current_instant;
+                self.update_fps_display(current_instant);
+            } else {
+                continue
+            }
         }
     }
 
-    fn frame_too_soon(&self, current_instant: Instant) -> bool {
+    fn throttle(&self, current_instant: Instant) -> FrameThrottler {
         use std::thread;
 
         let delta = current_instant - self.previous_instant;
 
         if delta < self.frame_interval {
             thread::sleep(self.frame_interval - delta);
-            return true;
+            return FrameThrottler::Skip;
         }
 
-        false
+        FrameThrottler::Run(delta)
     }
 
     fn update_fps_display(&mut self, current_instant: Instant) {
@@ -147,4 +164,13 @@ impl GameLoop {
             self.frame_count = 0;
         }
     }
+}
+
+/// Represents the option of either skipping the frame on the current
+/// iteration because it occurred too soon (relative to the target
+/// frame rate) or running the frame and passing the elapsed time since
+/// the last executed frame.
+enum FrameThrottler {
+    Skip,
+    Run(Duration),
 }

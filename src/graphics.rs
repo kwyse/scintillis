@@ -1,10 +1,8 @@
 //! Abstractions for the OpenGL graphics pipeline
 
 use glium::{Display, Frame, Program, Surface, VertexBuffer};
-use glium::backend::Facade;
 use glium::index::NoIndices;
 
-use config::Config;
 use app::Direction;
 
 type Coord = (i32, i32);
