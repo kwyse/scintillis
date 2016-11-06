@@ -1,14 +1,15 @@
 #![feature(proc_macro)]
 
 #[macro_use] extern crate clap;
+#[macro_use] extern crate glium;
 #[macro_use] extern crate serde_derive;
 
-extern crate glium;
 extern crate serde;
 extern crate serde_yaml;
 
 mod app;
 mod config;
+mod graphics;
 
 use std::path::Path;
 

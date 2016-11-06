@@ -37,6 +37,8 @@ impl App {
         use glium::glutin::{ElementState, Event};
         use glium::Surface;
 
+        use graphics::Render;
+
         let mut commands: Vec<Command> = Vec::new();
         let mut events = self.display.poll_events();
         let mut running = true;
@@ -58,6 +60,10 @@ impl App {
 
             let mut target = self.display.draw();
             target.clear_color(0.1, 0.1, 0.1, 1.0);
+
+            let quad = ::graphics::Quad::new(&self.display, self.config, (10i32, 10i32), (50i32, 50i32));
+            target.render(&quad);
+
             target.finish().unwrap();
 
             running
