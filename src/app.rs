@@ -8,7 +8,16 @@ use config::Config;
 
 #[derive(Debug, Clone, Copy)]
 enum Command {
-    Quit
+    Quit,
+    Move(Direction),
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum Direction {
+    Up,
+    Down,
+    Left,
+    Right,
 }
 
 pub struct App {
@@ -38,10 +47,13 @@ impl App {
         use glium::Surface;
 
         use graphics::Render;
+        use graphics::Quad;
 
         let mut commands: Vec<Command> = Vec::new();
         let mut events = self.display.poll_events();
         let mut running = true;
+
+        let mut quad: Quad = Quad::new(&self.display, (32i32, 32i32), (32i32, 32i32));
 
         GameLoop::new(self.config.frame_rate).run(|| {
             if let Some(event) = events.next() {
@@ -55,13 +67,13 @@ impl App {
 
             match commands.pop() {
                 Some(Command::Quit) => running = false,
+                Some(Command::Move(direction)) => quad.translate(direction),
                 _ => { }
             }
 
             let mut target = self.display.draw();
             target.clear_color(0.1, 0.1, 0.1, 1.0);
 
-            let quad = ::graphics::Quad::new(&self.display, self.config, (10i32, 10i32), (50i32, 50i32));
             target.render(&quad);
 
             target.finish().unwrap();
@@ -76,6 +88,10 @@ fn get_keyboard_command(key: VirtualKeyCode) -> Option<Command> {
 
     match key {
         Escape => Some(Command::Quit),
+        Up => Some(Command::Move(Direction::Up)),
+        Down => Some(Command::Move(Direction::Down)),
+        Left => Some(Command::Move(Direction::Left)),
+        Right => Some(Command::Move(Direction::Right)),
         _ => None
     }
 }

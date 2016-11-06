@@ -1,10 +1,11 @@
 //! Abstractions for the OpenGL graphics pipeline
 
-use glium::{Frame, Program, Surface, VertexBuffer};
+use glium::{Display, Frame, Program, Surface, VertexBuffer};
 use glium::backend::Facade;
 use glium::index::NoIndices;
 
 use config::Config;
+use app::Direction;
 
 type Coord = (i32, i32);
 type Size = (i32, i32);
@@ -16,19 +17,23 @@ pub struct Vertex {
 
 implement_vertex!(Vertex, position);
 
-pub struct Quad {
+pub struct Quad<'window> {
+    position: Coord,
+    size: Size,
+    window: &'window Display,
     vertices: VertexBuffer<Vertex>,
     indices: NoIndices,
     program: Program,
 }
 
-impl Quad {
-    pub fn new<'window, F: Facade>(display: &'window F, config: Config, origin: Coord, size: Size) -> Self {
+impl<'window> Quad<'window> {
+    pub fn new(window: &'window Display, origin: Coord, size: Size) -> Self {
         use glium::index::PrimitiveType;
 
         let p2u = pixel_to_unit;
-        let width = config.window_width;
-        let height = config.window_height;
+        let window_size = window.get_window().unwrap().get_inner_size_pixels().unwrap();
+        let width = window_size.0;
+        let height = window_size.1;
 
         let vertices = [
             Vertex { position: [p2u(origin.0, width), p2u(height as i32 - origin.1, height)] },
@@ -38,10 +43,36 @@ impl Quad {
         ];
 
         Quad {
-            vertices: VertexBuffer::new(display, &vertices).unwrap(),
+            position: origin,
+            size: size,
+            window: window,
+            vertices: VertexBuffer::new(window, &vertices).unwrap(),
             indices: NoIndices(PrimitiveType::TriangleStrip),
-            program: Program::from_source(display, vertex_shader(), fragment_shader(), None).unwrap(),
+            program: Program::from_source(window, vertex_shader(), fragment_shader(), None).unwrap(),
         }
+    }
+
+    pub fn translate(&mut self, direction: Direction) {
+        match direction {
+            Direction::Up => self.position.1 -= 32,
+            Direction::Down => self.position.1 += 32,
+            Direction::Left => self.position.0 -= 32,
+            Direction::Right => self.position.0 += 32,
+        }
+
+        let p2u = pixel_to_unit;
+        let width = 800u32;
+        let height = 600u32;
+        let size = (50, 50);
+
+        let vertices = [
+            Vertex { position: [p2u(self.position.0, width), p2u(height as i32 - self.position.1, height)] },
+            Vertex { position: [p2u(self.position.0 + size.0, width), p2u(height as i32 - self.position.1, height)] },
+            Vertex { position: [p2u(self.position.0, width), p2u(height as i32 - self.position.1 - size.1, height)] },
+            Vertex { position: [p2u(self.position.0 + size.0, width), p2u(height as i32 - self.position.1 - size.1, height)] },
+        ];
+
+        self.vertices = VertexBuffer::new(self.window, &vertices).unwrap();
     }
 }
 
@@ -92,7 +123,7 @@ pub trait Renderable<'entity> {
     fn program(&'entity self) -> &'entity Program;
 }
 
-impl<'entity> Renderable<'entity> for Quad {
+impl<'entity, 'window> Renderable<'entity> for Quad<'window> {
     fn vertices(&'entity self) -> &'entity VertexBuffer<Vertex> {
         &self.vertices
     }
